@@ -19,8 +19,8 @@ bayesian:
   exp_name: "Baseline_diapo_test_yaml"
   ksemillerio: 1                                           #BASELINE
   repe: 1                                                  #BASELINE
-  iteraciones: 10                                          #BASELINE
-  init: 0                                                  # 10 ITERACIONES TOTALES, DADO POR "iteraciones" segun BASELINE, a mlrMBO se le pasa "n_evals = iteraciones + init"
+  iteraciones: 0                                           #BASELINE
+  init: 12                                                 # 12 EVALUACIONES TOTALES (diseno inicial de mlr3mbo, fijo en 4 x 3 hiperparametros), a mlrMBO se le pasa "n_evals = iteraciones + init"
   
 lgbm:
   hs: #Parametros a explorar con sus rangos
