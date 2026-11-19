@@ -1,0 +1,124 @@
+# Solo parámetros propios de la prueba y cambios respecto de los defaults de la API.
+# Los defaults se heredan de la librería; no se vuelven a fijar en la notebook.
+
+# Nombre del experimento: fuera de las secciones de modelos.
+exp_name: "TabICL_Solo_ICL"
+
+directorios:                        # Rutas relativas al directorio que contiene este YAML.
+  datasets: "../datasets"           # Directorio de entrada.
+  exp: "../exp"                     # Directorio de experimentos.
+  predicciones: "../predicciones"   # Directorio de salida de predicciones.
+
+training:
+  dataset: "competencia_02.csv"      # Archivo de entrada dentro de directorios.datasets.
+  semilla_primigenia: [230047]       # Una semilla fija para toda la búsqueda de HP.
+  semillas: [230047, 230059, 230063, 230077, 230081, 137363, 284309, 417563, 638417, 873457] # Conservado de la referencia; no se recorre durante la búsqueda.
+  train: [201901, 201902, 201903, 201904, 201905, 201906, 201907, 201908, 201909, 201910, 201911, 201912, 202001, 202002, 202003, 202004, 202005, 202006, 202007, 202008, 202009, 202010, 202011, 202012, 202101, 202102, 202103, 202104] # Meses históricos para buscar HP.
+  train_final: [201901, 201902, 201903, 201904, 201905, 201906, 201907, 201908, 201909, 201910, 201911, 201912, 202001, 202002, 202003, 202004, 202005, 202006, 202007, 202008, 202009, 202010, 202011, 202012, 202101, 202102, 202103, 202104] # Meses históricos para el entrenamiento final.
+  future: [202106]                  # Mes de reporte final; no se usa para seleccionar HP.
+  undersampling: 0.1                # Igual que LGBM/XGB: retener 10% de CONTINUA y todas las bajas.
+  training_pct: 70                  # Igual que LGBM/XGB: 70% train; 30% validación sin undersampling.
+  cortes: [9000, 9500, 10000, 10500, 11000, 11500, 12000, 12500, 13000, 13500, 14000, 14500, 15000] # Envíos para reportar ganancia.
+  semillas_finales: 10              # Cantidad de semillas del entrenamiento final cuando se active.
+  campos_excluidos: ["numero_de_cliente", "foto_mes", "clase_ternaria"] # Excluir de generar lags/deltas, como en la referencia.
+
+produccion:
+  correr_prod: False                # Entrenar con HP elegidos sobre todo train_final, manteniendo undersampling.
+
+tabicl:
+  icl:
+    hs:
+      lr_maximo: [0.000001, 0.000003, 0.00001] # LR máximo del scheduler.
+      weight_decay: [0.0, 0.01]               # Regularización de AdamW.
+
+    fijos:
+      correr_busqueda: true
+      epochs: 80
+      evaluar_epoch_0: true                  # Una referencia inicial para toda la búsqueda.
+      evaluar_epochs: [10, 20, 50, 80]       # Cortes posteriores al entrenamiento.
+      metrica_seleccion: "auc"
+      filas_por_bloque: 4096                 # Contexto + consultas de cada bloque.
+      n_estimators_finetune: 1
+      n_estimators_inference: 1
+      freeze_col: true                      # Congelar columnas.
+      freeze_row: true                      # Congelar filas; ICL entrenable por defecto.
+
+      optimizacion:
+        warmup_epochs: 1                    # Subida lineal durante la primera época.
+        scheduler: "coseno"                 # Descenso hasta cero en la época 80.
+
+      preprocesamiento:                     # Mismas opciones que Retouche.
+        norm_methods: "none"
+        feat_shuffle_method: "none"
+        class_shuffle_method: "none"
+
+  retouche:
+    hs:                            # Parámetros a explorar: producto cartesiano de las cuatro listas.
+      lr_maximo: [0.0001, 0.0005]     # Máximo learning rate del adaptador.
+      factor_lr_compuerta: [3.0] # Multiplicador del LR para la compuerta alpha.
+      compuerta_inicial: [0.02] # Valor inicial de alpha, que regula la corrección del adaptador.
+      batchnorm: [true]      # Activar/desactivar BatchNorm dentro del adaptador.
+  
+    fijos:                         # Compartidos por las 16 combinaciones; no se exploran.
+      correr_busqueda: false         # Ejecutar secuencialmente el grid.
+      epochs: 30                    # Épocas completas de entrenamiento por combinación.
+      # evaluar_cada_epochs: 10       # Evaluar sobre el 30% reservado en 10, 20, 30, 40 y 50.
+      evaluar_epochs: [10, 20, 30]
+      evaluar_epoch_0: true          # Incluir referencia sin adaptador antes de entrenar.
+      metrica_seleccion: "auc"       # Elegir HP y época por AUC de validación, como LGBM/XGB.
+      filas_por_bloque: 512          # Filas totales por bloque de entrenamiento; contexto/consulta según la API.
+      n_estimators_finetune: 1       # Variantes internas del TFM durante entrenamiento.
+      n_estimators_inference: 1      # Variantes internas del TFM durante evaluación.
+      freeze_col: true              # Congelar el componente de columnas del TFM.
+      freeze_row: true              # Congelar el componente de filas del TFM.
+      freeze_icl: true              # Congelar ICL; solo se entrena el adaptador.
+
+      optimizacion:
+        optimizador: "AdamW"        # Algoritmo que actualiza los parámetros del adaptador.
+        weight_decay_otros: 0.0     # Excluir sesgos y BatchNorm del weight decay de AdamW.
+        weight_decay_compuerta: 0.0 # Excluir alpha del weight decay de AdamW.
+        warmup_epochs: 1            # Primera época: aumentar linealmente el LR desde cero.
+        scheduler: "coseno"         # Luego del warmup, bajar el LR hasta cero en la época 50, sin reinicios.
+        # Para reproducir una época seleccionada, conservar el horizonte de 50 del scheduler.
+
+      adaptador:
+        tipo: "cross"               # Arquitectura residual cross de la prueba Retouche.
+        capas: 2                    # Cantidad de capas cross.
+        rango_relativo: 0.25        # Ancho interno: floor(columnas x rango_relativo), mínimo 1.
+        inicializacion: "normal"    # Distribución para inicializar las matrices cross.
+        std_inicial: 0.01           # Desvío estándar de la inicialización.
+        sesgo_inicial: 0.0          # Valor inicial de los sesgos cross.
+
+      preprocesamiento:
+        norm_methods: "none"        # Sin Power/Quantile; mantiene el tratamiento estándar de la API.
+        feat_shuffle_method: "none" # Mantener el orden de las columnas.
+        class_shuffle_method: "none" # Mantener el orden de las clases.
+        # La API ajusta imputación, filtro y escalado solo con entrenamiento.
+        # Validación y futuro reutilizan ese ajuste.
+
+  ejecucion:                       # Parámetros fijos de ejecución, fuera del grid.
+    dispositivo: "cuda:0"           # GPU utilizada; una combinación por vez.
+    precision_adaptador: "fp32"     # Excluir el adaptador del autocast FP16 del entrenamiento.
+    precision_evaluacion: "fp32"    # Contexto y consultas del TFM en FP32.
+    permitir_tf32: false           # Desactivar la aproximación TF32 en operaciones FP32.
+    algoritmos_deterministas: true # Solicitar algoritmos deterministas de PyTorch.
+    determinismo_warn_only: true   # Avisar cuando una operación no tenga alternativa determinista.
+    cudnn_deterministic: true      # Solicitar algoritmos deterministas de cuDNN.
+    hilos_cpu: 1                   # Hilos de PyTorch y BLAS/OpenMP.
+    cublas_workspace_config: ":4096:8" # Configuración de cuBLAS para reproducibilidad.
+    tamanos_consulta_oom: [512, 256, 128] # Reducir solo consultas ante OOM; no recortar contexto.
+    batch_size_api: 1              # Tablas por llamada interna a la API; no son filas.
+    kv_cache: "kv"                 # Reutilizar claves y valores del contexto durante las consultas.
+    use_fa3: false                 # FlashAttention 3 desactivado, como antes.
+    offload_raiz: "~/.cache/tabicl_exp_col_temporales" # Temporales de evaluación dentro de WSL.
+    cpu_safety_factor: 0.2         # Fracción de RAM disponible considerada para offload.
+    safety_factor: 0.5             # Margen de memoria para planificar batches internos.
+    max_pinned_memory_mb: 512.0    # Límite de RAM fijada para transferencias.
+    use_async: false               # No usar transferencias asíncronas de la librería.
+    log_cada_bloques: 20           # Frecuencia de progreso impreso durante entrenamiento.
+    margen_vram_gib: 2.0                    # Margen de VRAM usado en la prueba de capacidad.
+
+predicciones:
+  activar_runner: false            # Reservado para la etapa posterior; no se ejecuta ahora.
+  semillas_runner: 100             # Cantidad de modelos al habilitar el runner.
+  predicciones_filename: "icl_tabicl.csv" # Archivo de salida, como en la referencia.
