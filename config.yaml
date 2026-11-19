@@ -1,6 +1,7 @@
 directorios:  # Definidos relativos al root del repo -> al leerse en el script se pasan a absolutas para respetar los setwd()
-  datasets: "../datasets"   #"C:/Users/Laura/Documents/DMEyF/datasets/"
-  exp: "../exp"             #"C:/Users/Laura/Documents/DMEyF/exp/"
+  datasets: "../datasets"        #"C:/Users/Laura/Documents/DMEyF/datasets/"
+  exp: "../exp"                  #"C:/Users/Laura/Documents/DMEyF/exp/"
+  predicciones: "../predicciones"
 
 
 training:  
@@ -15,13 +16,17 @@ training:
   semillas_finales: 10
   campos_excluidos: ["numero_de_cliente", "foto_mes", "clase_ternaria"]       #BASELINE
 
-bayesian:
-  exp_name: "Baseline_diapo_test_yaml"
+bayesian: 
+  correr_BO: False                                         # Activa  la corrida de la BO y actualiaciones asociadas -> en False no se "archiva" BO_Log.txt
+  exp_name: "Baseline_XGB"
   ksemillerio: 1                                           #BASELINE
   repe: 1                                                  #BASELINE
   iteraciones: 10                                          #BASELINE
-  init: 0                                                  # 10 ITERACIONES TOTALES, DADO POR "iteraciones" segun BASELINE, a mlrMBO se le pasa "n_evals = iteraciones + init"
-  
+  init: 16                                                  # 10 ITERACIONES TOTALES, DADO POR "iteraciones" segun BASELINE, a mlrMBO se le pasa "n_evals = iteraciones + init"
+
+produccion:
+  correr_prod: False                                        # Habilita la corrida de la celda 6.3 para "semillas_finales"
+
 lgbm:
   hs: #Parametros a explorar con sus rangos
     num_iterations: !expr paradox::p_int(lower = 64, upper = 4096)                  #BASELINE
@@ -65,3 +70,36 @@ lgbm:
     num_leaves : 1024         # se modificara
     min_sum_hessian_in_leaf : 1.0e-06  # se modificara
 
+predicciones:                       #Configura un runner para q tome los mejores HP del experimento (segun la carpeta configurada) y genere predicciones sin re-ejecutar todo lo anterior
+  activar_runner: TRUE
+  semillas_runner: 200
+  predicciones_filename: "baseline_xgb.csv"
+
+xgboost:
+  hs:
+    nrounds: !expr paradox::p_int(lower = 64, upper = 4096)
+    learning_rate: !expr paradox::p_dbl(lower = 0.001, upper = 0.05)
+    min_child_weight: !expr paradox::p_dbl(lower = 1e-06, upper = 0.1)
+    max_leaves: !expr paradox::p_int(lower = 16, upper = 2048)                      #ACTIVAR PARA lossguide
+    # max_depth: !expr paradox::p_int(lower = 2, upper = 14)                            #ACTIVAR PARA depthwise
+    
+  fijos:
+    grow_policy: "lossguide"   # "lossguide" o "depthwise"
+    booster: "gbtree"
+    objective: "binary:logistic"
+    eval_metric: "auc"
+    tree_method: "hist"
+    device: "cpu"
+    max_bin: 31
+    gamma: 0
+    reg_alpha: 0.0
+    reg_lambda: 0.0
+    subsample: 1.0
+    colsample_bytree: 0.50
+    colsample_bynode: 0.20
+    scale_pos_weight: 1.0
+    verbosity: 0
+
+    # La BO reemplaza el límite activo; el otro queda en cero.
+    max_depth: 0
+    max_leaves: 0
