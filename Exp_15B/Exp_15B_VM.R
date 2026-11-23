@@ -147,7 +147,6 @@ brazos_validos <- c("baseline", "lineal_azar", "lineal_invertido", "exp_azar", "
 args <- commandArgs(trailingOnly = TRUE)
 brazo <- if (length(args) >= 1) args[1] else "baseline"
 if (!brazo %in% brazos_validos) stop("Brazo desconocido: ", brazo)
-if (brazo != "baseline") stop("El brazo ", brazo, " todavia no esta implementado")
 if (length(args) >= 2) {
   config$training$semilla_primigenia <- as.integer(args[2])
   config$bayesian$exp_name <- paste0("15B_", brazo, "_", args[2])
@@ -576,14 +575,63 @@ Estimar_lightgbm <- function(xs) {
   return( list( metrica = res1$metrica) )
 }
 
+# ---- pesos temporales por mes segun el brazo ----
+# devuelve un vector nombrado (nombre = foto_mes) con el peso crudo de cada mes
+pesos_por_mes <- function(meses, brazo, semilla, vida_media = NA_real_) {
+  meses <- sort(unique(meses))
+  n <- length(meses)
+  lineal <- seq_len(n)                       # 1 = mes mas viejo ... n = mes mas reciente
+  expo <- 2^((seq_len(n) - n) / vida_media)  # 1 en el mes mas reciente; se divide por 2 cada vida_media meses hacia atras
+
+  perm <- NULL
+  if (brazo %in% c("lineal_azar", "exp_azar")) {
+    semilla_previa <- if (exists(".Random.seed", envir = .GlobalEnv)) get(".Random.seed", envir = .GlobalEnv) else NULL
+    set.seed(semilla, kind = "Mersenne-Twister")
+    perm <- sample(n)                        # permutacion de las posiciones 1..n, fija por primigenia
+    if (!is.null(semilla_previa)) assign(".Random.seed", semilla_previa, envir = .GlobalEnv)
+  }
+
+  w <- switch(brazo,
+    baseline         = rep(1, n),
+    lineal_invertido = rev(lineal),
+    lineal_azar      = lineal[perm],
+    exp_invertido    = rev(expo),
+    exp_azar         = expo[perm],
+    stop("Brazo sin implementar en pesos_por_mes: ", brazo)
+  )
+
+  setNames(as.numeric(w), meses)
+}
+
+# peso de cada fila segun su mes, normalizado a media 1 sobre las filas indicadas; NULL en el baseline
+pesos_filas <- function(foto_mes_filas) {
+  if (brazo == "baseline") return(NULL)
+  w <- unname(PARAM$pesos_mes[as.character(foto_mes_filas)])
+  stopifnot(!anyNA(w))
+  w / mean(w)
+}
+
+# diagnostico en el log: tamano efectivo de la muestra (Kish) y proporcion de positivos con y sin pesos
+diagnostico_pesos <- function(w, y, etiqueta) {
+  cat(etiqueta, "| ESS de Kish:", round(sum(w)^2 / sum(w^2)), "de", length(w),
+      "| prop. positivos ponderada:", round(sum(w * y) / sum(w), 5),
+      "| sin ponderar:", round(mean(y), 5), "\n")
+}
+
+PARAM$vida_media_meses <- 6   # vida media del decaimiento exponencial, en meses (fijada a priori)
+PARAM$pesos_mes <- pesos_por_mes(PARAM$train, brazo, PARAM$semilla_primigenia, PARAM$vida_media_meses)
+print(PARAM$pesos_mes)
+
 # ---- celda 36 ----
 # dejo los datos de training en el formato que necesita LightGBM
 
 dtrain <- lgb.Dataset(
   data = data.matrix(dataset_train[training == 1L, campos_buenos, with = FALSE]),
   label = dataset_train[training == 1L, clase01],
+  weight = pesos_filas(dataset_train[training == 1L, foto_mes]),   # NULL en el baseline: sin pesos
   free_raw_data = FALSE
 )
+if (brazo != "baseline") diagnostico_pesos(pesos_filas(dataset_train[training == 1L, foto_mes]), dataset_train[training == 1L, clase01], "Pesos BO")
 
 nrow(dtrain)
 ncol(dtrain)
@@ -701,9 +749,10 @@ dataset_train_sample <- dataset_train[
 
 dtrain_final <- lgb.Dataset(
   data= data.matrix(dataset_train_sample[, campos_buenos, with = FALSE]),
-  label= dataset_train_sample[, clase01]
+  label= dataset_train_sample[, clase01],
+  weight= pesos_filas(dataset_train_sample[, foto_mes])   # NULL en el baseline: sin pesos
 )
-
+if (brazo != "baseline") diagnostico_pesos(pesos_filas(dataset_train_sample[, foto_mes]), dataset_train_sample[, clase01], "Pesos final")
 
 for (j in seq_along(PARAM$semillas_final)) {
   sem <- PARAM$semillas_final[j]
