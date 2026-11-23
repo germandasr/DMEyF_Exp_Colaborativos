@@ -129,7 +129,7 @@ Evaluar si asignar pesos lineales a los meses del entrenamiento, sin orden tempo
 
 *Costo:* cada brazo son 10 workflows completos (uno por semilla primigenia). En total, 30 workflows.
 
-*Reparto entre integrantes:* cada integrante corre el baseline con sus 5 primigenias y los resultados se juntan para completar las 10. La familia lineal (placebo e invertido) la corre Fray y la familia exponencial (placebo e invertido) la corre Verónica, cada una con las 10 primigenias. Todas las corridas usan el mismo script (`Exp_15B_VM.R`, con el brazo como argumento) y el mismo entorno (versiones de R y de paquetes, mismo tipo de VM), porque la comparación pareada exige que la única diferencia entre brazos sea el vector de pesos.
+*Corridas:* cada integrante corre el baseline con sus 5 primigenias y los resultados se juntan para completar las 10. La familia lineal (placebo e invertido) es el experimento principal. Si se llega, se corre la extensión exponencial (placebo e invertido, ver "Fuera del recorte"), también con las 10 primigenias. Todas las corridas usan el mismo script (`Exp_15B_VM.R`, con el brazo como argumento) y el mismo entorno (versiones de R y de paquetes, mismo tipo de VM), porque la comparación pareada exige que la única diferencia entre brazos sea el vector de pesos.
 
 ### Fuera del recorte 
 
@@ -149,7 +149,7 @@ Quedan como Futuros:
 * **Robustez:** ganancia suavizada en cortes fijos de envíos alrededor del máximo, para no depender de un único punto de la curva.
 * **Referencia externa:** los ~496 M a 12.000 envíos informados en Zulip corresponden al máximo crudo del baseline anterior; no son comparables con la ganancia suavizada.
 * **Comparación pareada:** para cada semilla primigenia $s$ y cada comparación entre dos brazos $X$ e $Y$, $\Delta_s = G_{X,s} - G_{Y,s}$. Sobre las 10 diferencias se usa la prueba de Wilcoxon de rangos con signo, exacta y bilateral (Demšar, 2006), para C1 (placebo vs. baseline), C2 (invertido vs. baseline) y C3 (placebo vs. invertido).
-* **Multiplicidad:** las tres comparaciones se corrigen con Holm, con $\alpha = 0{,}05$ para la familia *(a confirmar con Fray)*. Con 10 pares, el $p$ exacto bilateral más chico posible es $2/2^{10} \approx 0{,}002$, por debajo del umbral más exigente de Holm ($0{,}05/3 \approx 0{,}017$), así que la corrección no deja las pruebas sin potencia de antemano.
+* **Multiplicidad:** las tres comparaciones se corrigen con Holm, con $\alpha = 0{,}05$ para la familia. Con 10 pares, el $p$ exacto bilateral más chico posible es $2/2^{10} \approx 0{,}002$, por debajo del umbral más exigente de Holm ($0{,}05/3 \approx 0{,}017$), así que la corrección no deja las pruebas sin potencia de antemano.
 * **Lectura de resultados:** cada comparación se informa como mejora, empeora o sin diferencia detectada (sección 3), con la mediana de $\Delta_s$ y el $p$ ajustado.
 
 * **Control de bordes de la BO:** en cada workflow se revisa si el mejor trial toca algún borde del rango de búsqueda. Si lo toca, se amplía ese rango, se vuelve a correr la BO y se documenta el cambio, como pide la bitácora de la cátedra. El rango ampliado se aplica a los tres brazos, para que sigan difiriendo solo en los pesos.
