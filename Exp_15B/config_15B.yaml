@@ -1,0 +1,71 @@
+directorios:  # Relativos a la carpeta Exp_15B (desde donde se corre el script); el script los pasa a rutas absolutas
+  datasets: "../../datasets"   
+  exp: "../../exp"             
+
+
+training:  
+  semilla_primigenia: [333331]
+  semillas: [700001, 700027, 700057, 700081, 700099, 333331, 444443, 555557, 666667, 121313]
+  train: [201901,201902,201903,201904,201905,201906,201907,201908,201909,201910,201911,201912,202001,202002,202003,202004,202005,202006,202007,202008,202009,202010,202011,202012,202101,202102,202103,202104]
+  validate: [202104]
+  train_final: [201901,201902,201903,201904,201905,201906,201907,201908,201909,201910,201911,201912,202001,202002,202003,202004,202005,202006,202007,202008,202009,202010,202011,202012,202101,202102,202103,202104]
+  future: [202106]
+  undersampling: 0.1                                                          #BASELINE
+  training_pct: 70                                                            #BASELINE
+  cortes: !expr seq(from = 9000, to= 15000, by = 500)
+  semillas_finales: 10
+  campos_excluidos: ["numero_de_cliente", "foto_mes", "clase_ternaria"]       #BASELINE
+
+bayesian:
+  exp_name: "15B_baseline_333331"
+  kmaldicion: 1                                            #BASELINE
+  ksemillerio: 1                                           #BASELINE
+  repe: 1                                                  #BASELINE
+  iteraciones: 0                                           #BASELINE
+  init: 12                                                 # 12 EVALUACIONES TOTALES (diseno inicial de mlr3mbo, fijo en 4 x 3 hiperparametros), a mlrMBO se le pasa "n_evals = iteraciones + init"
+  
+lgbm:
+  hs: #Parametros a explorar con sus rangos
+    num_iterations: !expr paradox::p_int(lower = 64, upper = 4096)                  #BASELINE
+    num_leaves: !expr paradox::p_int(lower = 16, upper = 2048)                      #BASELINE
+    min_sum_hessian_in_leaf: !expr paradox::p_dbl(lower = 1e-06, upper = 0.1)       #BASELINE
+  fijos:
+    boosting: "gbdt" # puede ir  dart  , ni pruebe random_forest
+    objective: "binary"
+    metric: "auc"    # la diapositiva pide reportar AUC
+    feature_pre_filter: FALSE
+    first_metric_only: FALSE
+    boost_from_average: TRUE
+    force_row_wise: TRUE
+    deterministic: TRUE
+    verbosity: -100
+    max_depth : -1
+    min_gain_to_split : 0
+    lambda_l1 : 0.0
+    lambda_l2 : 0.0
+    max_bin : 31
+    num_threads : 0
+
+    bagging_fraction : 1.0
+    pos_bagging_fraction : 1.0
+    neg_bagging_fraction : 1.0
+    is_unbalance : FALSE
+    scale_pos_weight : 1.0
+
+    drop_rate : 0.1
+    max_drop : 50
+    skip_drop : 0.5
+
+    extra_trees : FALSE
+
+    early_stopping : 0
+    min_data_in_leaf : 0           # fijo                       BASELINE
+    feature_fraction : 0.50        # fijo                       BASELINE
+    feature_fraction_bynode : 0.20 # fijo (diapositiva)         BASELINE
+    learning_rate : 0.005          # fijo                       BASELINE
+
+    num_iterations : 20000    # se modificara
+    num_leaves : 1024         # se modificara
+    min_sum_hessian_in_leaf : 1.0e-06  # se modificara
+
+notify: "https://ntfy.sh/dmeyf15b-escopetamonzon"
