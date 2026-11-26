@@ -28,18 +28,19 @@
 ## 3. Hipótesis Antagónica
 
 * **Grupo A (pro-ponderación, contexto):** Nicolás Baranek · Rodrigo Palpa. Sostienen que ponderar los meses del entrenamiento según su recencia o su semejanza con el mes a predecir mejora la ganancia. Proponen cuatro esquemas: escalonado, lineal, exponencial y por semejanza entre meses. Corren su propio experimento; nuestro diseño no depende de sus pesos ni de sus resultados.
-* **Hipótesis B:** ponderar los meses del entrenamiento no mejora la ganancia respecto de no ponderar. Unos pesos lineales asignados a meses al azar (placebo) o al revés, con más peso a lo viejo (invertido), no superan al baseline con $w = 1$, y el orden temporal de los pesos no cambia el resultado.
+* **Hipótesis B:** ponderar los meses del entrenamiento no mejora la ganancia respecto de no ponderar. Unos pesos asignados a meses al azar (placebo) o al revés, con más peso a lo viejo (invertido), no superan al baseline con $w = 1$, y el orden temporal de los pesos no cambia el resultado.  Se evalúan dos esquemas: exponencial (principal) y lineal (extensión).
 
 **Tipo de estudio:** ensayo cruzado (crossover), no ciego, controlado con placebo, de 3 brazos, con comparaciones pareadas por semilla primigenia.
 
 **Objetivo principal**
-Evaluar si asignar pesos lineales a los meses del entrenamiento, sin orden temporal (placebo) o en orden inverso (invertido), cambia la ganancia máxima suavizada del ensamble en 202106 respecto de no ponderar (baseline), sobre 10 semillas primigenias.
+Evaluar si asignar pesos exponenciales (vida media de 6 meses) a los meses del entrenamiento, sin orden temporal (placebo) o en orden inverso (invertido), cambia la ganancia máxima suavizada del ensamble en 202106 respecto de no ponderar (baseline), sobre 10 semillas primigenias.
 
 **Objetivos secundarios**
 1. Comparar el placebo con el invertido, para determinar si el orden temporal de los pesos cambia la ganancia.
 2. Describir, en cada brazo, el tamaño efectivo de la muestra, la proporción ponderada de positivos y los hiperparámetros elegidos por la BO.
 3. Analizar la variabilidad de la ganancia entre semillas primigenias en cada brazo, distinguiendo la ganancia del ensamble de la media por semilla.
 4. Determinar si la ponderación temporal debe incorporarse al workflow de la Segunda Competencia.
+5. Repetir las comparaciones con pesos lineales (extensión), como una segunda familia de comparaciones.
 
 **Comparaciones** (unidad de análisis: semilla primigenia; outcome: ganancia máxima suavizada del ensamble en 202106; Wilcoxon pareado bilateral)
 
@@ -122,18 +123,20 @@ Evaluar si asignar pesos lineales a los meses del entrenamiento, sin orden tempo
 | Brazo | Pesos | En el ensayo clínico | Qué aísla |
 | :--- | :--- | :--- | :--- |
 | **Baseline** | $w = 1$ (baseline del repo compartido) | Control sin tratamiento | Referencia. |
-| **Placebo** | Pesos lineales (1 a 28) asignados a los 28 meses al azar; un reparto distinto por semilla primigenia (el mismo en la BO y en el final) | La pastilla, sin el principio activo | El efecto de tener pesos desiguales, sin orden temporal. |
-| **Invertido** | Pesos lineales al revés: 28 para 201901 y 1 para 202104 | La droga "al revés" | El efecto de darle más peso a los meses viejos. |
+| **Placebo** | Pesos exponenciales (vida media de 6 meses) asignados a los 28 meses al azar; un reparto distinto por semilla primigenia (el mismo en la BO y en el final) | La pastilla, sin el principio activo | El efecto de tener pesos desiguales, sin orden temporal. |
+| **Invertido** | Pesos exponenciales al revés: 1 para 201901 y cerca de 0,04 para 202104 | La droga "al revés" | El efecto de darle más peso a los meses viejos. |
 
-*Construcción de los pesos:* cada fila recibe el peso de su mes; después se normaliza a media 1 sobre las filas de entrenamiento.
+*Construcción de los pesos:* cada fila recibe el peso de su mes; después se normaliza a media 1 sobre las filas de entrenamiento. El peso exponencial tiene una vida media de 6 meses, fijada a priori y antes de ver resultados: se divide por 2 cada 6 meses (un 11% por mes, constante), y el mes más pesado vale 1 y el más liviano cerca de 0,04. Se eligió un decaimiento intermedio, lo bastante marcado para no parecerse al baseline sin reducir la muestra efectiva a una fracción pequeña: el ESS de Kish medido quedó en 56-57% de las filas.
 
 *Costo:* cada brazo son 10 workflows completos (uno por semilla primigenia). En total, 30 workflows.
 
-*Corridas:* cada integrante corre el baseline con sus 5 primigenias y los resultados se juntan para completar las 10. La familia lineal (placebo e invertido) es el experimento principal. Si se llega, se corre la extensión exponencial (placebo e invertido, ver "Fuera del recorte"), también con las 10 primigenias. Todas las corridas usan el mismo script (`Exp_15B_VM.R`, con el brazo como argumento) y el mismo entorno (versiones de R y de paquetes, mismo tipo de VM), porque la comparación pareada exige que la única diferencia entre brazos sea el vector de pesos.
+*Corridas:* cada integrante corre el baseline con sus 5 primigenias y los resultados se juntan para completar las 10. La familia exponencial (placebo e invertido) es el experimento principal y la familia lineal (placebo e invertido) es la extensión, también con las 10 primigenias. Todas las corridas usan el mismo script (`Exp_15B_VM.R`, con el brazo como argumento) y el mismo entorno (versiones de R y de paquetes, mismo tipo de VM), porque la comparación pareada exige que la única diferencia entre brazos sea el vector de pesos.
+
+*Cambio de jerarquía:* en el diseño presentado en el Hito 1, la familia lineal era la principal y la exponencial la extensión. El 26-nov-2026 se invirtió el orden (motivo: la familia exponencial se completó primero). El cambio se hizo después de ver los resultados de la familia exponencial. No modifica ningún p ajustado, porque cada familia se corrige con Holm por separado.
 
 ### Fuera del recorte 
 
-**Extensión exponencial:** dos brazos adicionales con la misma estructura que la familia lineal: **exponencial al azar** (placebo: pesos exponenciales asignados a los meses con la misma permutación que el placebo lineal de cada primigenia) y **exponencial invertido** (más peso a los meses viejos). El peso decae con una vida media de 6 meses, fijada a priori y antes de ver resultados: se divide por 2 cada 6 meses (un 11% por mes, constante), con el mes más reciente igual a 1 y 201901 cercano a 0,04. Se eligió un decaimiento intermedio, lo bastante marcado para no parecerse al baseline sin reducir la muestra efectiva a una fracción pequeña. A nivel de mes, el tamaño efectivo de la muestra queda cerca del 57% (estimación aproximada). Se comparan contra el baseline y entre sí con Wilcoxon pareado, como una familia de comparaciones aparte. 
+**Extensión lineal:** dos brazos adicionales con la misma estructura que la familia exponencial: **lineal al azar** (placebo: pesos lineales de 1 a 28 asignados a los meses con la misma permutación que el placebo exponencial de cada primigenia) y **lineal invertido** (28 para 201901 y 1 para 202104). Se comparan contra el baseline y entre sí con Wilcoxon pareado, como una familia de comparaciones aparte. El exponencial "directo" (más peso a lo reciente) no se corre: es uno de los esquemas del Grupo A.
 
 Quedan como Futuros:
 * **Sin normalizar:** los pesos sin reescalar, para medir el efecto sobre la regularización.
@@ -167,8 +170,8 @@ Quedan como Futuros:
 5. **La BO no optimiza para los meses recientes:** valida sobre un 30% al azar de todos los meses mezclados (201901–202104), así que los hiperparámetros se eligen para el promedio del período y no para lo más cercano al testeo (issue #5). Pasa igual en los tres brazos.  La validación temporal queda como Futuro (sección 6).
 6. **Normalización y undersampling:** la normalización iguala la masa total de hessianos, pero no su distribución entre hojas. Además, los pesos se combinan con el undersampling 0,1, que ya reescala implícitamente la clase mayoritaria.
 7. **Los pesos cambian también la proporción de positivos:** como la tasa de bajas varía entre meses, reponderar los meses cambia la prevalencia efectiva de la clase positiva en el training. Se reporta para cada brazo.
-8. **Placebo aproximado:** como los meses tienen distinta cantidad de clientes, asignar los pesos lineales a meses al azar no conserva exactamente el ESS. Con 10 primigenias, los repartos al azar tampoco cubren todas las combinaciones posibles.
-9. **Un solo esquema de pesos y sin brazo de recencia:** se evalúan solo pesos lineales; el exponencial queda para la extensión. No hay un brazo lineal "directo" (más peso a lo reciente): con nuestros datos no se puede afirmar si darle más peso a lo reciente ayuda, solo si ayudan los pesos sin orden o al revés. Los pesos aprendidos por instancia (Jain y Shenoy) quedan fuera del alcance.
+8. **Placebo aproximado:** como los meses tienen distinta cantidad de clientes, asignar los pesos a meses al azar no conserva exactamente el ESS. Con 10 primigenias, los repartos al azar tampoco cubren todas las combinaciones posibles.
+9. **Dos esquemas de pesos y sin brazo de recencia:** se evalúan pesos exponenciales (principal) y lineales (extensión). Ninguna de las dos familias tiene un brazo "directo" (más peso a lo reciente): con nuestros datos no se puede afirmar si darle más peso a lo reciente ayuda, solo si ayudan los pesos sin orden o al revés. Los pesos aprendidos por instancia (Jain y Shenoy) quedan fuera del alcance.
 9 bis. **Una sola tasa de decaimiento:** la familia exponencial usa una vida media de 6 meses, elegida a priori y sin ajustar. Otras tasas (más rápidas o más lentas) podrían dar resultados distintos, y no se exploran en este experimento.
 10. **El mes como variable:** `foto_mes` y `numero_de_cliente` entran al modelo. El árbol puede separar por mes sin pesos, lo que podría diluir el efecto de la ponderación.
 11. **Interacción con los lags sin testear:** la idea de que los lags y deltas vuelven redundantes a los pesos no se prueba directamente, porque requeriría modificar el FE y romper el *ceteris paribus*.
